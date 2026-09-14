@@ -1,20 +1,10 @@
-name: M3U8 Live Recorder Test
-
-# This allows you to trigger the script manually from the website
-on:
-  workflow_dispatch:
-
-jobs:
-  record-stream:
-    runs-on: ubuntu-latest
-
     steps:
       - name: Install FFmpeg
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
       - name: Fetch Playlist and Record (1-Minute Test)
         run: |
-          # 1. Fetch the playlist and extract the Zee Cinemalu URL using Python
+          # 1. Fetch the playlist and extract the Zee Cinemalu URL
           python3 -c "
           import urllib.request
           
@@ -42,14 +32,23 @@ jobs:
               print(f'Failed to fetch: {e}')
           " > stream_url.txt
 
-          # 2. Read the URL and record with FFmpeg
+          # 2. Read the URL and record with FFmpeg using reconnect flags
           STREAM_URL=$(cat stream_url.txt)
           if [[ $STREAM_URL == http* ]]; then
-            echo "Found stream URL. Starting 1-minute recording..."
-            # -t 60 dictates a 60-second capture
-            ffmpeg -y -user_agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" -i "$STREAM_URL" -t 60 -c copy zee_cinemalu_test.mp4
+            echo "Found stream URL: $STREAM_URL"
+            echo "Starting 1-minute recording with reconnect protocols..."
+            
+            # The -reconnect flags force FFmpeg to stay alive during stream hiccups
+            ffmpeg -y \
+              -user_agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" \
+              -reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 2 \
+              -i "$STREAM_URL" \
+              -t 60 \
+              -c copy zee_cinemalu_test.mp4
+              
           else
-            echo "Failed to get stream URL."
+            echo "Failed to get stream URL. Output was:"
+            cat stream_url.txt
             exit 1
           fi
 
