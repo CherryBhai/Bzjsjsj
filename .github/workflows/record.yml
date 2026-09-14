@@ -38,8 +38,8 @@ jobs:
           
           echo "Found stream URL: $STREAM_URL"
           
-          # 4. Record for 2 minute (Forcing HLS format with -f hls to bypass PHP extension errors)
-                    ffmpeg -y -user_agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" -reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 2 -f hls -i "$STREAM_URL" -t 120 -c copy test_output.mp4
+          # 4. Record for 1 minute (Forcing HLS format with -f hls to bypass PHP extension errors)
+          ffmpeg -y -user_agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" -reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 2 -f hls -i "$STREAM_URL" -t 10800 -c copy test_output.mp4
 
       - name: Upload Video for Download
         uses: actions/upload-artifact@v4
@@ -48,4 +48,3 @@ jobs:
           name: zee_cinemalu_recording
           path: test_output.mp4
           if-no-files-found: ignore
- 
