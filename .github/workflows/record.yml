@@ -1,17 +1,15 @@
-name: M3U8 Live Recorder to GDrive
+name: M3U8 Live Recorder (GitHub Storage)
 
 on:
   workflow_dispatch:
 
 jobs:
-  record-and-upload:
+  record-stream:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Install FFmpeg and Python Google APIs
-        run: |
-          sudo apt-get update && sudo apt-get install -y ffmpeg
-          pip install google-api-python-client google-auth httplib2
+      - name: Install FFmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
       - name: Fetch Playlist and Record (10 Minutes)
         run: |
@@ -26,50 +24,12 @@ jobs:
           fi
           
           echo "Found URL. Starting 10-minute recording..."
-          # -t 600 dictates a 10-minute recording
-          ffmpeg -y -user_agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" -reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 2 -f hls -i "$STREAM_URL" -t 600 -c copy final_video.mp4
+          ffmpeg -y -user_agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" -reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 2 -f hls -i "$STREAM_URL" -t 60 -c copy final_video.mp4
 
-      - name: Upload to Google Drive
-        env:
-          GDRIVE_CREDENTIALS: ${{ secrets.GDRIVE_CREDENTIALS }}
-          GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
-        run: |
-          cat << 'EOF' > upload_to_drive.py
-          import os
-          import json
-          from google.oauth2.service_account import Credentials
-          from googleapiclient.discovery import build
-          from googleapiclient.http import MediaFileUpload
-
-          creds_json = os.environ.get("GDRIVE_CREDENTIALS")
-          folder_id = os.environ.get("GDRIVE_FOLDER_ID")
-          
-          if not creds_json or not folder_id:
-              print("Error: Missing GitHub Secrets.")
-              exit(1)
-
-          creds_dict = json.loads(creds_json)
-          creds = Credentials.from_service_account_info(
-              creds_dict, scopes=['https://www.googleapis.com/auth/drive.file']
-          )
-          
-          drive_service = build('drive', 'v3', credentials=creds)
-          
-          file_metadata = {
-              'name': 'zee_cinemalu_10_minutes.mp4',
-              'parents': [folder_id]
-          }
-          
-          print("Starting upload to Google Drive...")
-          media = MediaFileUpload('final_video.mp4', mimetype='video/mp4', resumable=True)
-          
-          drive_service.files().create(
-              body=file_metadata,
-              media_body=media,
-              fields='id'
-          ).execute()
-          
-          print("Upload completely successful!")
-          EOF
-          
-          python3 upload_to_drive.py
+      - name: Upload Video to GitHub
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: zee_cinemalu_10_minutes
+          path: final_video.mp4
+          if-no-files-found: ignore
