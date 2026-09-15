@@ -1,7 +1,11 @@
-name: M3U8 Live Recorder (GitHub Storage)
+name: M3U8 Live Recorder (Scheduled Artifact)
 
 on:
+  # Allows you to still click the button manually if you want
   workflow_dispatch:
+  # Schedules the run automatically at 18:00 UTC (11:30 PM IST)
+  schedule:
+    - cron: '0 18 * * *'
 
 jobs:
   record-stream:
@@ -11,7 +15,7 @@ jobs:
       - name: Install FFmpeg
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
-      - name: Fetch Playlist and Record (10 Minutes)
+      - name: Fetch Playlist and Record (4 Hours)
         run: |
           curl -s -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" "https://ranapkx.site/RANAPK33m/TVD/tvd.m3u" > playlist.m3u
           grep -i -A 1 "zee cinemalu" playlist.m3u > matched_lines.txt
@@ -23,13 +27,15 @@ jobs:
             exit 1
           fi
           
-          echo "Found URL. Starting 10-minute recording..."
-          ffmpeg -y -user_agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" -reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 2 -f hls -i "$STREAM_URL" -t 60 -c copy final_video.mp4
+          echo "Found URL. Starting 4-hour recording..."
+          # -t 14400 dictates exactly 4 hours (11:30 PM to 3:30 AM)
+          ffmpeg -y -user_agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" -reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 2 -f hls -i "$STREAM_URL" -t 14400 -c copy final_video.mp4
 
-      - name: Upload Video to GitHub
+      - name: Upload Video to GitHub Artifacts
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: zee_cinemalu_10_minutes
+          name: zee_cinemalu_night_recording
           path: final_video.mp4
           if-no-files-found: ignore
+ 
