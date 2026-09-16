@@ -1,7 +1,10 @@
-name: M3U8 Live Recorder (Crash-Proof)
+name: M3U8 Live Recorder (8:45PM to 12:30AM)
 
 on:
   workflow_dispatch:
+  schedule:
+    # Schedules the run automatically at 15:15 UTC (8:45 PM IST)
+    - cron: '15 15 * * *'
 
 jobs:
   record-stream:
@@ -11,10 +14,10 @@ jobs:
       - name: Install FFmpeg
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
-      - name: Fetch Playlist and Record (2 Hours)
+      - name: Fetch Playlist and Record (3 hrs 45 mins)
         run: |
-          # 7200 seconds equals exactly 2 hours to finish the 10:30 PM window
-          END_TIME=$(( $(date +%s) + 7200 ))
+          # 13500 seconds equals exactly 3 hours and 45 minutes
+          END_TIME=$(( $(date +%s) + 13500 ))
           PART=1
           
           while [ $(date +%s) -lt $END_TIME ]; do
@@ -33,7 +36,7 @@ jobs:
             
             echo "Starting recording Part $PART. Time remaining: $REMAINING seconds."
             
-            # The '|| true' tells GitHub to ignore stream glitches and keep the loop running!
+            # The '|| true' stops GitHub from killing the job if the stream glitches
             ffmpeg -y -user_agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" -reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 10 -f hls -i "$STREAM_URL" -t $REMAINING -c copy "zee_cinemalu_part${PART}.mp4" || true
             
             PART=$((PART + 1))
@@ -45,7 +48,6 @@ jobs:
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: zee_cinemalu_recovered_recording
+          name: zee_cinemalu_night_recording
           path: "*.mp4"
           if-no-files-found: ignore
- 
