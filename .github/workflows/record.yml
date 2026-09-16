@@ -1,10 +1,7 @@
-name: M3U8 Live Recorder (7:30PM to 10:30PM)
+name: M3U8 Live Recorder (Crash-Proof)
 
 on:
   workflow_dispatch:
-  schedule:
-    # Schedules the run automatically at 14:00 UTC (7:30 PM IST)
-    - cron: '0 14 * * *'
 
 jobs:
   record-stream:
@@ -14,10 +11,10 @@ jobs:
       - name: Install FFmpeg
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
-      - name: Fetch Playlist and Record (3 Hours Total)
+      - name: Fetch Playlist and Record (2 Hours)
         run: |
-          # Calculate the exact time 3 hours (10800 seconds) from now
-          END_TIME=$(( $(date +%s) + 10800 ))
+          # 7200 seconds equals exactly 2 hours to finish the 10:30 PM window
+          END_TIME=$(( $(date +%s) + 7200 ))
           PART=1
           
           while [ $(date +%s) -lt $END_TIME ]; do
@@ -31,16 +28,16 @@ jobs:
               continue
             fi
             
-            # Calculate how much time is left out of the 3 hours
             REMAINING=$(( END_TIME - $(date +%s) ))
             if [ $REMAINING -le 0 ]; then break; fi
             
-            echo "Starting recording Part $PART. Time remaining to capture: $REMAINING seconds."
+            echo "Starting recording Part $PART. Time remaining: $REMAINING seconds."
             
-            # Record using the fresh link.
-            ffmpeg -y -user_agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" -reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 10 -f hls -i "$STREAM_URL" -t $REMAINING -c copy "zee_cinemalu_part${PART}.mp4"
+            # The '|| true' tells GitHub to ignore stream glitches and keep the loop running!
+            ffmpeg -y -user_agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" -reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 10 -f hls -i "$STREAM_URL" -t $REMAINING -c copy "zee_cinemalu_part${PART}.mp4" || true
             
             PART=$((PART + 1))
+            # Wait 5 seconds before pulling a new link
             sleep 5
           done
 
@@ -48,6 +45,7 @@ jobs:
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: zee_cinemalu_3hr_recording
+          name: zee_cinemalu_recovered_recording
           path: "*.mp4"
           if-no-files-found: ignore
+ 
