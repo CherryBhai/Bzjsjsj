@@ -1,10 +1,10 @@
-name: M3U8 Live Recorder (8:45PM to 12:30AM)
+name: M3U8 Live Recorder (6:30PM to 10:30PM)
 
 on:
   workflow_dispatch:
   schedule:
-    # Schedules the run automatically at 15:15 UTC (8:45 PM IST)
-    - cron: '15 15 * * *'
+    # Schedules the run automatically at 13:00 UTC (6:30 PM IST)
+    - cron: '0 13 * * *'
 
 jobs:
   record-stream:
@@ -14,10 +14,10 @@ jobs:
       - name: Install FFmpeg
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
-      - name: Fetch Playlist and Record (3 hrs 45 mins)
+      - name: Fetch Playlist and Record (4 Hours)
         run: |
-          # 13500 seconds equals exactly 3 hours and 45 minutes
-          END_TIME=$(( $(date +%s) + 13500 ))
+          # 14400 seconds equals exactly 4 hours
+          END_TIME=$(( $(date +%s) + 14400 ))
           PART=1
           
           while [ $(date +%s) -lt $END_TIME ]; do
@@ -26,21 +26,28 @@ jobs:
             STREAM_URL=$(grep -i -A 1 "zee cinemalu" playlist.m3u | grep -v "^#" | grep "http" | head -n 1 | tr -d '\r')
             
             if [[ -z "$STREAM_URL" ]]; then
-              echo "Error: Channel not found. Retrying in 30 seconds..."
-              sleep 30
+              echo "Error: Channel not found. Retrying in 60 seconds..."
+              sleep 60
               continue
             fi
             
             REMAINING=$(( END_TIME - $(date +%s) ))
             if [ $REMAINING -le 0 ]; then break; fi
             
-            echo "Starting recording Part $PART. Time remaining: $REMAINING seconds."
+            echo "Starting recording Part $PART..."
+            # The loop continues even if FFmpeg hits an error
+            ffmpeg -y -user_agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" -reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 10 -f hls -i "$STREAM_URL" -t $REMAINING -c copy "zee_cinemalu_part${PART}.mp4" || echo "FFmpeg stopped."
             
-            # The '|| true' stops GitHub from killing the job if the stream glitches
-            ffmpeg -y -user_agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" -reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 10 -f hls -i "$STREAM_URL" -t $REMAINING -c copy "zee_cinemalu_part${PART}.mp4" || true
+            # Quality Check: Verify the output file is larger than 1MB
+            FILE_SIZE=$(stat -c%s "zee_cinemalu_part${PART}.mp4" 2>/dev/null || echo 0)
+            if [ "$FILE_SIZE" -lt 1000000 ]; then
+              echo "Stream rejected. File is only $FILE_SIZE bytes. Pausing 60s to bypass IP ban..."
+              rm -f "zee_cinemalu_part${PART}.mp4"
+              sleep 60
+              continue
+            fi
             
             PART=$((PART + 1))
-            # Wait 5 seconds before pulling a new link
             sleep 5
           done
 
@@ -48,6 +55,6 @@ jobs:
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: zee_cinemalu_night_recording
+          name: zee_cinemalu_recording
           path: "*.mp4"
           if-no-files-found: ignore
