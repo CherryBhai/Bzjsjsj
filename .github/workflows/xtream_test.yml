@@ -1,18 +1,59 @@
-name: Xtream Playlist Extractor
+name: Xtream Live Recorder (5 Minutes)
 
 on:
   workflow_dispatch:
 
 jobs:
-  extract-playlist:
+  record-stream:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Download Raw Playlist
+      - name: Install FFmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Fetch Xtream Playlist and Record (5 Minutes)
         run: |
-          curl -s -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" "http://line.krishka.xyz:80/get.php?username=AdemSarikaya&password=16A525&type=m3u_plus" > playlist.m3u
-      
-      - name: Upload Playlist to Artifacts
+          END_TIME=$(( $(date +%s) + 300 ))
+          PART=1
+          
+          while [ $(date +%s) -lt $END_TIME ]; do
+            echo "Fetching fresh Xtream playlist..."
+            # Added -L to follow redirects and changed User-Agent to mimic a popular IPTV app
+            curl -s -L -A "IPTVSmartersPro" "http://line.krishka.xyz:80/get.php?username=AdemSarikaya&password=16A525&type=m3u_plus" > playlist.m3u
+            
+            # Searching for the exact name from your screenshot
+            STREAM_URL=$(grep -i -A 1 "ZEE CINEMALU HD" playlist.m3u | grep -v "^#" | grep "http" | head -n 1 | tr -d '\r')
+            
+            if [[ -z "$STREAM_URL" ]]; then
+              echo "Error: Channel not found. Retrying in 30 seconds..."
+              sleep 30
+              continue
+            fi
+            
+            REMAINING=$(( END_TIME - $(date +%s) ))
+            if [ $REMAINING -le 0 ]; then break; fi
+            
+            echo "Starting recording Part $PART for up to $REMAINING seconds..."
+            # Matched the FFmpeg User-Agent disguise to the curl command
+            ffmpeg -y -user_agent "IPTVSmartersPro" -reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 10 -i "$STREAM_URL" -t $REMAINING -c copy "zee_cinemalu_part${PART}.mp4" || echo "FFmpeg stopped."
+            
+            FILE_SIZE=$(stat -c%s "zee_cinemalu_part${PART}.mp4" 2>/dev/null || echo 0)
+            if [ "$FILE_SIZE" -lt 100000 ]; then
+              echo "Stream rejected. File is only $FILE_SIZE bytes. Pausing 30s to bypass IP ban..."
+              rm -f "zee_cinemalu_part${PART}.mp4"
+              sleep 30
+              continue
+            fi
+            
+            PART=$((PART + 1))
+            sleep 5
+          done
+
+      - name: Upload Video to GitHub Artifacts
         uses: actions/upload-artifact@v4
+        if: always()
         with:
-          name: xtream_raw_playlist
-          path: playlist.m3u
+          name: zee_cinemalu_5min_test
+          path: "*.mp4"
+          if-no-files-found: ignore
+ 
