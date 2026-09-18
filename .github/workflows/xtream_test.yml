@@ -1,55 +1,18 @@
-name: Xtream Live Recorder (5 Minutes)
+name: Xtream Playlist Extractor
 
 on:
   workflow_dispatch:
 
 jobs:
-  record-stream:
+  extract-playlist:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Install FFmpeg
-        run: sudo apt-get update && sudo apt-get install -y ffmpeg
-
-      - name: Fetch Xtream Playlist and Record (5 Minutes)
+      - name: Download Raw Playlist
         run: |
-          END_TIME=$(( $(date +%s) + 300 ))
-          PART=1
-          
-          while [ $(date +%s) -lt $END_TIME ]; do
-            echo "Fetching fresh Xtream playlist..."
-            curl -s -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" "http://line.krishka.xyz:80/get.php?username=AdemSarikaya&password=16A525&type=m3u_plus" > playlist.m3u
-            
-            STREAM_URL=$(grep -i -A 1 "zee cinemalu" playlist.m3u | grep -v "^#" | grep "http" | head -n 1 | tr -d '\r')
-            
-            if [[ -z "$STREAM_URL" ]]; then
-              echo "Error: Channel not found. Retrying in 30 seconds..."
-              sleep 30
-              continue
-            fi
-            
-            REMAINING=$(( END_TIME - $(date +%s) ))
-            if [ $REMAINING -le 0 ]; then break; fi
-            
-            echo "Starting recording Part $PART for up to $REMAINING seconds..."
-            ffmpeg -y -user_agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" -reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 10 -i "$STREAM_URL" -t $REMAINING -c copy "zee_cinemalu_part${PART}.mp4" || echo "FFmpeg stopped."
-            
-            FILE_SIZE=$(stat -c%s "zee_cinemalu_part${PART}.mp4" 2>/dev/null || echo 0)
-            if [ "$FILE_SIZE" -lt 100000 ]; then
-              echo "Stream rejected. File is only $FILE_SIZE bytes. Pausing 30s to bypass IP ban..."
-              rm -f "zee_cinemalu_part${PART}.mp4"
-              sleep 30
-              continue
-            fi
-            
-            PART=$((PART + 1))
-            sleep 5
-          done
-
-      - name: Upload Video to GitHub Artifacts
+          curl -s -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" "http://line.krishka.xyz:80/get.php?username=AdemSarikaya&password=16A525&type=m3u_plus" > playlist.m3u
+      
+      - name: Upload Playlist to Artifacts
         uses: actions/upload-artifact@v4
-        if: always()
         with:
-          name: zee_cinemalu_5min_test
-          path: "*.mp4"
-          if-no-files-found: ignore
+          name: xtream_raw_playlist
+          path: playlist.m3u
