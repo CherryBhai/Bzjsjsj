@@ -1,10 +1,7 @@
-name: M3U8 Live Recorder (6:30PM to 10:30PM)
+name: M3U8 Live Recorder (5 Hours)
 
 on:
   workflow_dispatch:
-  schedule:
-    # Schedules the run automatically at 13:00 UTC (6:30 PM IST)
-    - cron: '0 13 * * *'
 
 jobs:
   record-stream:
@@ -14,15 +11,16 @@ jobs:
       - name: Install FFmpeg
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
-      - name: Fetch Playlist and Record (4 Hours)
+      - name: Fetch Playlist and Record (5 Hours)
         run: |
-          # 14400 seconds equals exactly 4 hours
-          END_TIME=$(( $(date +%s) + 14400 ))
+          # 18000 seconds equals exactly 5 hours
+          END_TIME=$(( $(date +%s) + 18000 ))
           PART=1
           
           while [ $(date +%s) -lt $END_TIME ]; do
             echo "Fetching fresh playlist link..."
-            curl -s -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" "https://ranapkx.site/RANAPK33m/TVD/tvd.m3u" > playlist.m3u
+            # Updated to the new RANAPK33t link
+            curl -s -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" "https://ranapkx.site/RANAPK33t/TVD/tvd.m3u" > playlist.m3u
             STREAM_URL=$(grep -i -A 1 "zee cinemalu" playlist.m3u | grep -v "^#" | grep "http" | head -n 1 | tr -d '\r')
             
             if [[ -z "$STREAM_URL" ]]; then
@@ -58,3 +56,4 @@ jobs:
           name: zee_cinemalu_recording
           path: "*.mp4"
           if-no-files-found: ignore
+ 
