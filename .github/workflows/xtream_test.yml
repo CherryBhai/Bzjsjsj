@@ -1,4 +1,4 @@
-name: Xtream Live Recorder (5 Minutes)
+name: M3U8 Live Recorder (5 Minutes Test)
 
 on:
   workflow_dispatch:
@@ -11,18 +11,18 @@ jobs:
       - name: Install FFmpeg
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
-      - name: Fetch Xtream Playlist and Record (5 Minutes)
+      - name: Fetch Playlist and Record (5 Minutes)
         run: |
+          # 300 seconds equals exactly 5 minutes
           END_TIME=$(( $(date +%s) + 300 ))
           PART=1
           
           while [ $(date +%s) -lt $END_TIME ]; do
-            echo "Fetching fresh Xtream playlist..."
-            # Added -L to follow redirects and changed User-Agent to mimic a popular IPTV app
-            curl -s -L -A "IPTVSmartersPro" "http://line.krishka.xyz:80/get.php?username=AdemSarikaya&password=16A525&type=m3u_plus" > playlist.m3u
+            echo "Fetching fresh playlist link..."
+            curl -s -L -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" "https://raw.githubusercontent.com/Sflex0719/STBPLUS/main/Zio.m3u" > playlist.m3u
             
-            # Searching for the exact name from your screenshot
-            STREAM_URL=$(grep -i -A 1 "ZEE CINEMALU HD" playlist.m3u | grep -v "^#" | grep "http" | head -n 1 | tr -d '\r')
+            # Searching for the exact HD keyword
+            STREAM_URL=$(grep -i -A 1 "Zee Cinemalu HD" playlist.m3u | grep -v "^#" | grep "http" | head -n 1 | tr -d '\r')
             
             if [[ -z "$STREAM_URL" ]]; then
               echo "Error: Channel not found. Retrying in 30 seconds..."
@@ -33,10 +33,12 @@ jobs:
             REMAINING=$(( END_TIME - $(date +%s) ))
             if [ $REMAINING -le 0 ]; then break; fi
             
-            echo "Starting recording Part $PART for up to $REMAINING seconds..."
-            # Matched the FFmpeg User-Agent disguise to the curl command
-            ffmpeg -y -user_agent "IPTVSmartersPro" -reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 10 -i "$STREAM_URL" -t $REMAINING -c copy "zee_cinemalu_part${PART}.mp4" || echo "FFmpeg stopped."
+            echo "Starting recording Part $PART..."
             
+            # +genpts flag prevents audio desync, -f hls is active for standard M3U streams
+            ffmpeg -y -user_agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" -reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 10 -fflags +genpts -f hls -i "$STREAM_URL" -t $REMAINING -c copy "zee_cinemalu_part${PART}.mp4" || echo "FFmpeg stopped."
+            
+            # Quality Check lowered to 100KB for the short test
             FILE_SIZE=$(stat -c%s "zee_cinemalu_part${PART}.mp4" 2>/dev/null || echo 0)
             if [ "$FILE_SIZE" -lt 100000 ]; then
               echo "Stream rejected. File is only $FILE_SIZE bytes. Pausing 30s to bypass IP ban..."
@@ -48,12 +50,20 @@ jobs:
             PART=$((PART + 1))
             sleep 5
           done
+          
+          echo "Recording timeframe complete. Merging all parts into one file..."
+          ls zee_cinemalu_part*.mp4 | sort -V | while read filename; do echo "file '$filename'" >> parts_list.txt; done
+          
+          if [ -f parts_list.txt ]; then
+            ffmpeg -y -f concat -safe 0 -i parts_list.txt -c copy zee_cinemalu_final_test.mp4
+          else
+            echo "Error: No video parts found to merge."
+          fi
 
-      - name: Upload Video to GitHub Artifacts
+      - name: Upload Single Video to GitHub Artifacts
         uses: actions/upload-artifact@v4
         if: always()
         with:
           name: zee_cinemalu_5min_test
-          path: "*.mp4"
+          path: "zee_cinemalu_final_test.mp4"
           if-no-files-found: ignore
- 
