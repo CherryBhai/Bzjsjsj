@@ -1,4 +1,4 @@
-name: M3U8 Live Recorder (Synced Audio + Padded Timer)
+name: M3U8 Live Recorder (Single File Output)
 
 on:
   workflow_dispatch:
@@ -13,7 +13,7 @@ jobs:
 
       - name: Fetch Playlist and Record (5 Hrs 15 Mins)
         run: |
-          # 18900 seconds equals 5 hours and 15 minutes to prevent the ending from cutting off
+          # 18900 seconds equals 5 hours and 15 minutes
           END_TIME=$(( $(date +%s) + 18900 ))
           PART=1
           
@@ -33,9 +33,10 @@ jobs:
             
             echo "Starting recording Part $PART..."
             
-            # Added -fflags +genpts to regenerate timestamps and perfectly sync audio/video during stream drops
+            # The +genpts flag prevents audio desync when jumping between parts
             ffmpeg -y -user_agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" -reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 10 -fflags +genpts -f hls -i "$STREAM_URL" -t $REMAINING -c copy "zee_cinemalu_part${PART}.mp4" || echo "FFmpeg stopped."
             
+            # Quality Check
             FILE_SIZE=$(stat -c%s "zee_cinemalu_part${PART}.mp4" 2>/dev/null || echo 0)
             if [ "$FILE_SIZE" -lt 1000000 ]; then
               echo "Stream rejected. File is only $FILE_SIZE bytes. Pausing 60s to bypass IP ban..."
@@ -47,11 +48,23 @@ jobs:
             PART=$((PART + 1))
             sleep 5
           done
+          
+          echo "Recording timeframe complete. Merging all parts into one file..."
+          # Sorts the parts perfectly (1, 2, 3...) and writes them to a text file
+          ls zee_cinemalu_part*.mp4 | sort -V | while read filename; do echo "file '$filename'" >> parts_list.txt; done
+          
+          # Instructs FFmpeg to stitch them all into one continuous final file
+          if [ -f parts_list.txt ]; then
+            ffmpeg -y -f concat -safe 0 -i parts_list.txt -c copy zee_cinemalu_final_recording.mp4
+          else
+            echo "Error: No video parts found to merge."
+          fi
 
-      - name: Upload Video Parts to GitHub Artifacts
+      - name: Upload Single Video to GitHub Artifacts
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: zee_cinemalu_synced_recording
-          path: "*.mp4"
+          name: zee_cinemalu_final_recording
+          # Changed the upload path to target ONLY the merged file
+          path: "zee_cinemalu_final_recording.mp4"
           if-no-files-found: ignore
