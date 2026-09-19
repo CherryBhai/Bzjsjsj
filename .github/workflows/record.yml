@@ -1,4 +1,4 @@
-name: M3U8 Live Recorder (Single File Output)
+name: M3U8 Live Recorder (1 Minute Test)
 
 on:
   workflow_dispatch:
@@ -11,20 +11,21 @@ jobs:
       - name: Install FFmpeg
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
-      - name: Fetch Playlist and Record (5 Hrs 15 Mins)
+      - name: Fetch Playlist and Record (1 Minute)
         run: |
-          # 18900 seconds equals 5 hours and 15 minutes
-          END_TIME=$(( $(date +%s) + 18900 ))
+          # 60 seconds equals exactly 1 minute
+          END_TIME=$(( $(date +%s) + 60 ))
           PART=1
           
           while [ $(date +%s) -lt $END_TIME ]; do
             echo "Fetching fresh playlist link..."
             curl -s -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" "https://ranapkx.site/RANAPK33t/TVD/tvd.m3u" > playlist.m3u
+            
             STREAM_URL=$(grep -i -A 1 "zee cinemalu" playlist.m3u | grep -v "^#" | grep "http" | head -n 1 | tr -d '\r')
             
             if [[ -z "$STREAM_URL" ]]; then
-              echo "Error: Channel not found. Retrying in 60 seconds..."
-              sleep 60
+              echo "Error: Channel not found. Retrying in 10 seconds..."
+              sleep 10
               continue
             fi
             
@@ -33,15 +34,14 @@ jobs:
             
             echo "Starting recording Part $PART..."
             
-            # The +genpts flag prevents audio desync when jumping between parts
             ffmpeg -y -user_agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" -reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 10 -fflags +genpts -f hls -i "$STREAM_URL" -t $REMAINING -c copy "zee_cinemalu_part${PART}.mp4" || echo "FFmpeg stopped."
             
-            # Quality Check
+            # Quality Check lowered to 50KB for a 1-minute test
             FILE_SIZE=$(stat -c%s "zee_cinemalu_part${PART}.mp4" 2>/dev/null || echo 0)
-            if [ "$FILE_SIZE" -lt 1000000 ]; then
-              echo "Stream rejected. File is only $FILE_SIZE bytes. Pausing 60s to bypass IP ban..."
+            if [ "$FILE_SIZE" -lt 50000 ]; then
+              echo "Stream rejected. File is only $FILE_SIZE bytes. Pausing 10s to bypass IP ban..."
               rm -f "zee_cinemalu_part${PART}.mp4"
-              sleep 60
+              sleep 10
               continue
             fi
             
@@ -50,12 +50,10 @@ jobs:
           done
           
           echo "Recording timeframe complete. Merging all parts into one file..."
-          # Sorts the parts perfectly (1, 2, 3...) and writes them to a text file
           ls zee_cinemalu_part*.mp4 | sort -V | while read filename; do echo "file '$filename'" >> parts_list.txt; done
           
-          # Instructs FFmpeg to stitch them all into one continuous final file
           if [ -f parts_list.txt ]; then
-            ffmpeg -y -f concat -safe 0 -i parts_list.txt -c copy zee_cinemalu_final_recording.mp4
+            ffmpeg -y -f concat -safe 0 -i parts_list.txt -c copy zee_cinemalu_1min_test.mp4
           else
             echo "Error: No video parts found to merge."
           fi
@@ -64,7 +62,7 @@ jobs:
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: zee_cinemalu_final_recording
-          # Changed the upload path to target ONLY the merged file
-          path: "zee_cinemalu_final_recording.mp4"
+          name: zee_cinemalu_1min_test
+          path: "zee_cinemalu_1min_test.mp4"
           if-no-files-found: ignore
+ 
