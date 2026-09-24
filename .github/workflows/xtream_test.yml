@@ -1,39 +1,42 @@
-name: Real-ESRGAN Photographic AI Upscale
+name: Upclear Unified AI Upscale (BSRGAN)
 
 on:
   workflow_dispatch:
 
 jobs:
-  upscale:
+  unified_upscale:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Install Software Vulkan Driver (Lavapipe)
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install PyTorch and Dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y mesa-vulkan-drivers vulkan-tools
-          
-      - name: Download Real-ESRGAN NCNN Binary
-        run: |
-          wget https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesrgan-ncnn-vulkan-20220424-ubuntu.zip
-          unzip realesrgan-ncnn-vulkan-20220424-ubuntu.zip -d realesrgan
-          chmod +x realesrgan/realesrgan-ncnn-vulkan
+          # Forces the CPU-only version of PyTorch to avoid massive GPU driver downloads
+          pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+          pip install opencv-python requests
+          git clone https://github.com/cszn/BSRGAN.git
 
       - name: Download Source Image
         run: |
-          curl -o input.jpg "https://i.postimg.cc/W3N9JK8T/61316839.jpg"
+          mkdir -p BSRGAN/testsets/input
+          curl -o BSRGAN/testsets/input/61316839.jpg "https://i.postimg.cc/W3N9JK8T/61316839.jpg"
 
-      - name: Execute Photographic AI Upscaling
+      - name: Execute BSRGAN on CPU
         run: |
-          # Switched -n to realesrgan-x4plus for photorealistic generative texture synthesis
-          ./realesrgan/realesrgan-ncnn-vulkan -i input.jpg -o output_upscaled.jpg -n realesrgan-x4plus -g 0
+          cd BSRGAN
+          # Processes the entire image in a single pass without separating the background and face
+          python main_test_bsrgan.py
 
-      - name: Upload Upscaled Artifact
+      - name: Upload Restored Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: upscaled-image
-          path: output_upscaled.jpg
+          name: upscaled-unified-image
+          path: BSRGAN/test_results/
           retention-days: 1
