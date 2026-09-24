@@ -1,7 +1,7 @@
 name: Upclear CPU Upscale Test
 
 on:
-  workflow_dispatch: # Allows you to manually trigger the test from the Actions tab
+  workflow_dispatch:
 
 jobs:
   upscale:
@@ -11,29 +11,31 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
+      - name: Install Software Vulkan Driver (Lavapipe)
+        run: |
+          # Injects a CPU-based Vulkan rasterizer into the runner
+          sudo apt-get update
+          sudo apt-get install -y mesa-vulkan-drivers vulkan-tools
+          
       - name: Download Real-ESRGAN NCNN Binary
         run: |
-          # Fetches the standalone C++ executable that bypasses PyTorch dependencies
           wget https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesrgan-ncnn-vulkan-20220424-ubuntu.zip
           unzip realesrgan-ncnn-vulkan-20220424-ubuntu.zip -d realesrgan
           chmod +x realesrgan/realesrgan-ncnn-vulkan
 
       - name: Download Source Image
         run: |
-          # Downloads the low-quality image via the direct link found in the screenshot
           curl -o input.jpg "https://i.postimg.cc/W3N9JK8T/61316839.jpg"
 
-      - name: Execute Upscaling on CPU
+      - name: Execute Upscaling via CPU Software Rasterizer
         run: |
-          # -i is the input image
-          # -o is the output file
-          # -n specifies the compact model weight
-          # -g -1 forces the engine to bypass Vulkan/GPU and run exclusively on the GitHub CPU
-          ./realesrgan/realesrgan-ncnn-vulkan -i input.jpg -o output_upscaled.jpg -n realesr-animevideov3 -g -1
+          # With mesa-vulkan-drivers installed, -g 0 will target the CPU via Lavapipe
+          ./realesrgan/realesrgan-ncnn-vulkan -i input.jpg -o output_upscaled.jpg -n realesr-animevideov3 -g 0
 
       - name: Upload Upscaled Artifact
         uses: actions/upload-artifact@v4
         with:
           name: upscaled-image
           path: output_upscaled.jpg
-          retention-days: 1 # Keeps repository storage clean
+          retention-days: 1
+ 
