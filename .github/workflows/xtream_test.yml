@@ -1,4 +1,4 @@
-name: Upclear Video AI Pipeline
+name: Upclear Video AI Pipeline (BSRGAN)
 
 on:
   workflow_dispatch:
@@ -11,53 +11,61 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Install System Dependencies (FFmpeg & Vulkan)
+      - name: Install System Dependencies (FFmpeg)
         run: |
           sudo apt-get update
-          # FFmpeg handles video processing, mesa-vulkan-drivers allows CPU upscaling
-          sudo apt-get install -y ffmpeg mesa-vulkan-drivers vulkan-tools
+          sudo apt-get install -y ffmpeg
 
-      - name: Set up Python (For Google Drive Download)
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
           
-      - name: Install gdown
-        run: pip install gdown
-
-      - name: Download Real-ESRGAN NCNN Binary
+      - name: Install PyTorch, Dependencies & gdown
         run: |
-          wget https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesrgan-ncnn-vulkan-20220424-ubuntu.zip
-          unzip realesrgan-ncnn-vulkan-20220424-ubuntu.zip -d realesrgan
-          chmod +x realesrgan/realesrgan-ncnn-vulkan
+          pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+          pip install opencv-python requests matplotlib scipy gdown
+
+      - name: Clone BSRGAN and Download Weights
+        run: |
+          git clone https://github.com/cszn/BSRGAN.git
+          mkdir -p BSRGAN/model_zoo
+          wget https://github.com/cszn/KAIR/releases/download/v1.0/BSRGAN.pth -P BSRGAN/model_zoo
+
+      - name: Patch BSRGAN for CPU Execution
+        run: |
+          cd BSRGAN
+          sed -i 's/torch.cuda.current_device()/0/g' main_test_bsrgan.py
+          sed -i "s/device = torch.device('cuda'/device = torch.device('cpu'/g" main_test_bsrgan.py
+          sed -i 's/model.cuda()/model.cpu()/g' main_test_bsrgan.py
 
       - name: Download Source Video from Google Drive
         run: |
-          # Extracts the file ID from your provided URL and bypasses the Google virus scan warning
+          # Bypasses the virus scan warning to download the file directly
           gdown "1llpHGkS0Nk_OQwnavQJ4dpefTx-kUg3K" -O input.mp4
 
       - name: Extract Audio and Video Frames
         run: |
-          mkdir original_frames
-          mkdir upscaled_frames
+          # Deletes BSRGAN's stock sample images so it does not waste compute time on them
+          rm -rf BSRGAN/testsets/RealSRSet/*
           
-          # Extracts the original audio track to a separate file
+          # Extracts the original audio track
           ffmpeg -i input.mp4 -q:a 0 -map a original_audio.aac
           
-          # Splits the video into individual PNG frames (e.g., frame_00000001.png)
-          ffmpeg -i input.mp4 original_frames/frame_%08d.png
+          # Slices the video into frames and drops them directly where BSRGAN looks for inputs
+          ffmpeg -i input.mp4 BSRGAN/testsets/RealSRSet/frame_%08d.png
 
-      - name: Upscale All Frames via True AI (CPU)
+      - name: Execute BSRGAN on CPU
         run: |
-          # Real-ESRGAN natively supports processing an entire directory of frames
-          # We are using the realesrgan-x4plus model for photorealistic texture synthesis
-          ./realesrgan/realesrgan-ncnn-vulkan -i original_frames -o upscaled_frames -n realesrgan-x4plus -g 0
+          cd BSRGAN
+          # Processes every frame placed in the RealSRSet folder
+          python main_test_bsrgan.py
 
       - name: Reassemble Video, Add Audio & Boost Brightness
         run: |
-          # -framerate 24 assumes a standard cinema framerate (change if your original is 30fps or 60fps)
-          # -vf "eq=brightness=0.1" mathematically increases the visual brightness by 10%
-          ffmpeg -framerate 24 -i upscaled_frames/frame_%08d.png -i original_audio.aac -vf "eq=brightness=0.1" -c:v libx264 -crf 18 -pix_fmt yuv420p -c:a aac -strict experimental final_upscaled_video.mp4
+          # Uses a glob pattern (*.png) because BSRGAN alters the output filename slightly
+          # -vf "eq=brightness=0.1" mathematically increases visual brightness by 10%
+          ffmpeg -framerate 24 -pattern_type glob -i "BSRGAN/testsets/RealSRSet_results_x4/*.png" -i original_audio.aac -vf "eq=brightness=0.1" -c:v libx264 -crf 18 -pix_fmt yuv420p -c:a aac -strict experimental final_upscaled_video.mp4
 
       - name: Upload Final Upscaled Video
         uses: actions/upload-artifact@v4
@@ -65,3 +73,4 @@ jobs:
           name: final-remastered-video
           path: final_upscaled_video.mp4
           retention-days: 1
+ 
