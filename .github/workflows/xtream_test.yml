@@ -18,10 +18,18 @@ jobs:
 
       - name: Install PyTorch and Dependencies
         run: |
-          # Added matplotlib and scipy to fulfill the requirements of BSRGAN's utility scripts
           pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
           pip install opencv-python requests matplotlib scipy
           git clone https://github.com/cszn/BSRGAN.git
+
+      - name: Patch BSRGAN for CPU Execution
+        run: |
+          cd BSRGAN
+          # Replaces the hardcoded GPU ID call with '0' to bypass the CUDA crash
+          sed -i 's/torch.cuda.current_device()/0/g' main_test_bsrgan.py
+          # Forces the script to assign the model to the CPU instead of CUDA
+          sed -i "s/device = torch.device('cuda'/device = torch.device('cpu'/g" main_test_bsrgan.py
+          sed -i 's/model.cuda()/model.cpu()/g' main_test_bsrgan.py
 
       - name: Download Source Image
         run: |
