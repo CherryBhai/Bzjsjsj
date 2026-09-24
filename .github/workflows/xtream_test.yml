@@ -18,9 +18,9 @@ jobs:
 
       - name: Install PyTorch and Dependencies
         run: |
-          # Forces the CPU-only version of PyTorch to avoid massive GPU driver downloads
+          # Added matplotlib and scipy to fulfill the requirements of BSRGAN's utility scripts
           pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
-          pip install opencv-python requests
+          pip install opencv-python requests matplotlib scipy
           git clone https://github.com/cszn/BSRGAN.git
 
       - name: Download Source Image
@@ -31,7 +31,6 @@ jobs:
       - name: Execute BSRGAN on CPU
         run: |
           cd BSRGAN
-          # Processes the entire image in a single pass without separating the background and face
           python main_test_bsrgan.py
 
       - name: Upload Restored Artifact
